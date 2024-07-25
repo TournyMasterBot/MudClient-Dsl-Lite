@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MudClient Web Interface</title>
+    <style>
+        .terminal-container {
+            font-family: monospace;
+            background-color: #000;
+            color: #0f0;
+            padding: 10px;
+            border: 1px solid #0f0;
+            height: 400px;
+            overflow: hidden;
+            position: relative;
+        }
+        .xterm {
+            height: calc(100% - 30px); /* Adjust for input area */
+            width: 100%;
+        }
+        .input-area {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background-color: #000;
+            border-top: 1px solid #0f0;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        #input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 16px;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@4.16.0/css/xterm.css" />
+</head>
+<body>
+    <div class="container">
+        <div id="terminal" class="terminal-container">
+            <div id="xterm" class="xterm" style="padding: 5px;"></div>
+            <div class="input-area">
+                <input type="text" id="input" name="input" placeholder="Enter command">
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@4.16.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.3.0/lib/xterm-addon-fit.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const terminalElement = document.getElementById('xterm');
+            const terminal = new Terminal();
+            const fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.open(terminalElement);
+            fitAddon.fit();
+
+            const socket = new WebSocket('ws://localhost:4000');
+
+            socket.addEventListener('open', () => {
+                console.log('WebSocket connection established');
+            });
+
+            socket.addEventListener('error', (error) => {
+                console.error('WebSocket error:', error);
+            });
+
+            socket.addEventListener('message', function(event) {
+                terminal.write(event.data);
+            });
+
+            document.getElementById('input').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    const input = document.getElementById('input').value;
+                    if (input !== null) {
+                        // Send an empty line feed if the input is empty
+                        socket.send(input || '\n');
+                        terminal.write(`\r\n${input || ''}\r\n`);
+                        document.getElementById('input').value = '';
+                    }
+                }
+            });
+
+            document.getElementById('input').focus();
+        });
+    </script>
+</body>
+</html>

@@ -3,14 +3,17 @@ import Logger from '../logger';
 import { IDslWorld } from '../dsl/dsl-world';
 import IMudClient from '../models/mud-client/IMudClient';
 import { removeANSIEscapeCodes } from '../utils/string-utils';
+import { WebSocket } from 'ws';
 
 export class MudClient implements IMudClient {
     public host: string;
-    public port: number;    
+    public port: number;
     public log: Logger;
     public world?: IDslWorld | undefined;
-    
+
     private client: net.Socket;
+    private webSocketClient?: WebSocket;
+
     constructor(config: Partial<MudClient>) {
         this.log = config.log!;
         this.host = config.host!;
@@ -38,9 +41,18 @@ export class MudClient implements IMudClient {
         this.client.end();
     }
 
-    private async onData(data: Buffer): Promise<void> {
-        const receivedData = data.toString();        
-        const removeAnsiCodesFromData = removeANSIEscapeCodes(receivedData);
+    public setWebSocketClient(ws: WebSocket): void {
+        this.webSocketClient = ws;
+    }
+
+    private onData(data: Buffer): void {
+        const receivedData = data.toString();
+        // Send raw ANSI codes to WebSocket client
+        if (this.webSocketClient) {
+            this.webSocketClient.send(receivedData);
+        }
+
+        // Cleaned data for logging purposes
         this.log.serverMessage(receivedData);
     }
 
@@ -50,21 +62,7 @@ export class MudClient implements IMudClient {
     }
 
     private onError(error: Error): void {
-        this.log.error('Error:', { err: error});
+        this.log.error('Error:', { err: error });
         process.exit(1);
     }
 }
-
-// Handling uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-    process.exit(2);
-});
-
-// Handling unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    process.exit(3);
-});
-
-export default MudClient;

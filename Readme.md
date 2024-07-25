@@ -4,6 +4,11 @@
 * Use NodeJS v20 (nvm use 20)
 * Install [Visual Studio Code](https://code.visualstudio.com/Download)
 
-# Usage
+# Installation
 * npm install [for first run]
+
+## Play :: CLI
 * npm run start
+
+## Play :: Web
+* npm run start:web
