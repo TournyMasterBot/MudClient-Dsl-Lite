@@ -7,7 +7,7 @@
     "postbuild": "copyfiles -u 1 src/public/**/* dist/ && copyfiles -u 1 dist/src/**/* dist/public/js/",
     "clean": "tsc --build --clean",
     "start": "npm run build && node dist/src/index.js",
-    "start:web": "npm run build && npm run postbuild && node dist/src/online.js",
+    "start:web": "npm run build && npm run postbuild && node dist/src/local-web.js 0.0.0.0 4000 local",
     "test": "npm run build && jest"
   },
   "author": "",

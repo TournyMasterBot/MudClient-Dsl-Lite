@@ -1,16 +1,18 @@
 import * as net from 'net';
 import Logger from '../logger';
 import { IDslWorld } from '../dsl/dsl-world';
-import IMudClient from '../models/mud-client/IMudClient';
+import { CommandProcessorInput, CommandProcessorOutput } from '../dsl/processors/command-processor';
 import { removeANSIEscapeCodes } from '../utils/string-utils';
 import { WebSocket } from 'ws';
+import IMudClient from '../models/mud-client/IMudClient';
 
 export class MudClient implements IMudClient {
     public host: string;
-    public port: number;
+    public port: number;    
     public log: Logger;
     public world?: IDslWorld | undefined;
 
+    private commandHandler: ((command: CommandProcessorInput) => Promise<CommandProcessorOutput>) | null = null;
     private client: net.Socket;
     private webSocketClient?: WebSocket;
 
@@ -28,16 +30,19 @@ export class MudClient implements IMudClient {
 
     public connect(): void {
         this.client.connect(this.port, this.host, () => {
-            this.log.serverMessage(`Connected to MUD server at ${this.host}:${this.port}`);
+            this.sendMessage(`Connected to MUD server at ${this.host}:${this.port}`);
         });
     }
 
+    /**
+     * Sends a command to the remote server
+     */
     public sendCommand(command: string): void {
         this.client.write(`${command}\n`);
     }
 
     public disconnect(): void {
-        this.log.serverMessage("Client requested server disconnect");
+        this.sendMessage("Client requested server disconnect");
         this.client.end();
     }
 
@@ -45,24 +50,67 @@ export class MudClient implements IMudClient {
         this.webSocketClient = ws;
     }
 
-    private onData(data: Buffer): void {
-        const receivedData = data.toString();
-        // Send raw ANSI codes to WebSocket client
-        if (this.webSocketClient) {
-            this.webSocketClient.send(receivedData);
-        }
-
-        // Cleaned data for logging purposes
-        this.log.serverMessage(receivedData);
+    public setCommandHandler(handler: (command: CommandProcessorInput) => Promise<CommandProcessorOutput>): void {
+        this.commandHandler = handler;
     }
 
-    private onClose(): void {
-        this.log.serverMessage('Connection closed');
+    public async onData(data: Buffer): Promise<void> {
+        const receivedData = data.toString();        
+        const removeAnsiCodesFromData = removeANSIEscapeCodes(receivedData);
+        if (this.commandHandler) {
+            try {
+                const commandResult = await this.commandHandler({
+                    shouldEchoRawCommand: false,
+                    shouldEchoFinalCommand: true,
+                    rawCommandData: receivedData,
+                    rawCommand: removeAnsiCodesFromData,
+                    finalOutput: receivedData
+                });
+                if(commandResult.shouldEchoRawCommand) {
+                    this.sendMessage(receivedData);
+                }
+                if(commandResult.shouldEchoFinalCommand) {
+                    this.sendMessage(commandResult.modifiedCommand.finalOutput);
+                }
+            } catch (error: any) {
+                this.log.error('Error handling command:', { err: error });
+            }
+        } else {
+            this.sendMessage(receivedData);
+        }
+    }
+
+    /**
+     * Writes a message to the local web client and CLI
+     */
+    public sendMessage(message: string): void {
+        this.log.serverMessage(message);
+        if (this.webSocketClient) {
+            this.webSocketClient.send(message);
+        } 
+    }
+
+    public onClose(): void {
+        this.sendMessage('Connection closed');
         process.exit(0);
     }
 
-    private onError(error: Error): void {
-        this.log.error('Error:', { err: error });
-        process.exit(1);
+    public onError(error: Error): void {
+        this.log.error('Error:', { err: error});
+        //process.exit(1);
     }
 }
+
+// Handling uncaught exceptions
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(2);
+});
+
+// Handling unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(3);
+});
+
+export default MudClient;

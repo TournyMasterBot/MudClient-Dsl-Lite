@@ -1,5 +1,5 @@
-import { MudClientApp } from "./mud/MudApp";
 import * as readline from 'readline';
+import { MudClientApp } from './mud/MudApp';
 
 (async () => {
     const HOST = 'dsl-mud.org';
